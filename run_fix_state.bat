@@ -6,7 +6,7 @@ start /B python server.py
 
 timeout 3 > nul
 
-set env_list="CartPoleSwingUpFixInitState-v0" "CartPoleSwingUpFixInitState-v0" "CartPoleSwingUpFixInitState-v0" "CartPoleSwingUpFixInitState-v0"
+set env_list="MountainCarFixPos-v0" "MountainCarFixPos-v0" "MountainCarFixPos-v0" "MountainCarFixPos-v0"
 
 set i=0
 for %%v in (%env_list%) do (

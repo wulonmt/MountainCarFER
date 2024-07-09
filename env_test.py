@@ -11,7 +11,6 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 import argparse
-from CustomPPO import CustomPPO
 from datetime import datetime
 import Env
 
@@ -20,13 +19,15 @@ if __name__ == "__main__":
     n_cpu = 1
     batch_size = 64
     env_name = "MountainCarFixPos-v0"
+    init_x = -1
+    x_limit = 0.5
     #trained_env = GrayScale_env
-    trained_env = make_vec_env(env_name, n_envs=n_cpu, vec_env_cls=SubprocVecEnv, seed = 1)
+    trained_env = make_vec_env(env_name, n_envs=n_cpu, vec_env_cls=SubprocVecEnv, seed = 1, env_kwargs = {"init_x": init_x, "x_limit": x_limit})
     tensorboard_log = "./"
 
     #trained_env = make_vec_env(GrayScale_env, n_envs=n_cpu,)
     #env = gym.make("highway-fast-v0", render_mode="human")
-    model = CustomPPO("MlpPolicy",
+    model = PPO("MlpPolicy",
                 trained_env,
                 policy_kwargs=dict(net_arch=dict(pi=[256, 256], vf=[256, 256])),
                 n_steps=batch_size * 12 // n_cpu,
@@ -38,8 +39,7 @@ if __name__ == "__main__":
                 target_kl=0.2,
                 ent_coef=0.03,
                 vf_coef=0.8,
-                tensorboard_log=tensorboard_log,
-                use_advantage = False)
+                tensorboard_log=tensorboard_log)
     time_str = datetime.now().strftime("%Y%m%d%H%M")
     # Train the agent
     model.learn(total_timesteps=int(1e3), tb_log_name=time_str)
@@ -47,11 +47,16 @@ if __name__ == "__main__":
     model.save(tensorboard_log + "model")
 
     model = PPO.load(tensorboard_log + "model")
-    env = gym.make(env_name, render_mode="human")
+    # env = gym.make(env_name, render_mode="human")
+    env = gym.make(env_name, render_mode="human", init_x = init_x, x_limit = x_limit)
     while True:
         obs, info = env.reset()
         done = truncated = False
+        counter = 0
         while not (done or truncated):
             action, _ = model.predict(obs)
             obs, reward, done, truncated, info = env.step(action)
             env.render()
+            counter += 1
+            if counter > 100:
+                break
