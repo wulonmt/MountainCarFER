@@ -20,22 +20,22 @@ import os
 import sys
 import Env
 from utils.CustomPPO import CustomPPO
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-l", "--log_name", help="modified log name", type=str, default ="auto")
-parser.add_argument("-s", "--save_log", help="whether save log or not", type=str, default = "True") #parser can't pass bool
-parser.add_argument("-e", "--environment", help="which my- env been used", type=str, default="CartPoleSwingUpFixInitState-v1")
-# parser.add_argument("-e", "--environment", help="which my- env been used", type=str, default="CartPoleSwingUpFixInitState-v0")
-parser.add_argument("-t", "--train", help="training or not", type=str, default = "True")
-parser.add_argument("-r", "--render_mode", help="h for human & r for rgb_array", type=str, default = "r")
-parser.add_argument("-i", "--index", help="client index", type=int, default = 0, required = True)
-parser.add_argument("-p", "--port", help="local port", type=str, default="8080")
-args = parser.parse_args()
+def paser_argument():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-l", "--log_name", help="modified log name", type=str, default ="auto")
+    parser.add_argument("-s", "--save_log", help="whether save log or not", type=str, default = "True") #parser can't pass bool
+    parser.add_argument("-e", "--environment", help="which my- env been used", type=str, default="MountainCarFixPos-v0")
+    # parser.add_argument("-e", "--environment", help="which my- env been used", type=str, default="MountainCar-v0")
+    parser.add_argument("-t", "--train", help="training or not", type=str, default = "True")
+    parser.add_argument("-r", "--render_mode", help="h for human & r for rgb_array", type=str, default = "r")
+    parser.add_argument("-i", "--index", help="client index", type=int, default = 0, required = True)
+    parser.add_argument("-p", "--port", help="local port", type=str, default="8080")
+    return parser.parse_args()
 # ENV_LIST=["merge", "highway", "racetrack", "roundabout", "intersection", "crowded_highway", "crowded_merge", "highway_hard"]
-INIT_POS = [{"init_x": 2, "init_angle": np.pi/2}, {"init_x": -2, "init_angle": np.pi/2}, {"init_x": 2, "init_angle": -np.pi/2}, {"init_x": -2, "init_angle": -np.pi/2}, {"init_x": 0, "init_angle": np.pi}]
+INIT_POS = [{"init_x": 0, "x_limit": 0.3}, {"init_x": -0.3, "x_limit": 0.3}, {"init_x": -0.6, "x_limit": 0.3}, {"init_x": 0.3, "x_limit": 0.3}, {"init_x": 0, "x_limit": 0.3}]
 
-class CartPoleSwingUpClient(fl.client.NumPyClient):
-    def __init__(self, client_index):
+class MountainCarFixPosClient(fl.client.NumPyClient):
+    def __init__(self, client_index, args=None):
         
         rm = "rgb_array" if args.render_mode == "r" else "human"
 
@@ -45,8 +45,10 @@ class CartPoleSwingUpClient(fl.client.NumPyClient):
         # self.env = make_vec_env(f"{args.environment}", n_envs=n_cpu, vec_env_cls=SubprocVecEnv)
         if(args.index < 4):
             self.env = make_vec_env(f"{args.environment}", n_envs=n_cpu, vec_env_cls=SubprocVecEnv, env_kwargs = INIT_POS[args.index])
+            # self.env = make_vec_env(f"{args.environment}", n_envs=n_cpu, vec_env_cls=SubprocVecEnv)
         else:
             self.env = make_vec_env(f"{args.environment}", n_envs=n_cpu, vec_env_cls=SubprocVecEnv, env_kwargs = INIT_POS[4])
+            # self.env = make_vec_env(f"{args.environment}", n_envs=n_cpu, vec_env_cls=SubprocVecEnv)
         self.tensorboard_log=f"{args.environment}_ppo/" if args.save_log == "True" else None
         time_str = Ptime()
         time_str.set_time_now()
@@ -75,6 +77,7 @@ class CartPoleSwingUpClient(fl.client.NumPyClient):
                     )
 
         self.n_round = int(0)
+        self.args = args
         
         if args.save_log == "True":
             description = args.log_name if args.log_name != "auto" else \
@@ -114,29 +117,33 @@ class CartPoleSwingUpClient(fl.client.NumPyClient):
             self.model.learning_rate = config["learning_rate"]
         print(f"Training learning rate: {self.model.learning_rate}")
         # Train the agent
-        self.model.learn(total_timesteps=int(5e3),
+        self.model.learn(total_timesteps=int(2e3),
                          tb_log_name=(self.log_name + f"/round_{self.n_round}" if self.n_round>9 else self.log_name + f"/round_0{self.n_round}") if self.log_name is not None else None ,
                          reset_num_timesteps=False,
                          )
         # Save the agent
-        if args.save_log == "True":
+        if self.args.save_log == "True":
             print("log name: ", self.tensorboard_log + self.log_name)
             self.model.save(self.tensorboard_log + self.log_name + "/model")
             
         return self.get_parameters(config={}), self.model.num_timesteps, {}
 
     def evaluate(self, parameters, config):
+        print("evaluating model")
         self.set_parameters(parameters)
+        print("after set parameters")
         reward_mean, reward_std = evaluate_policy(self.model, self.env)
-        return -reward_mean, self.model.num_timesteps, {"reward mean": reward_mean, "reward std": reward_std} 
+        print("after evaluate policy")
+        return -reward_mean, self.model.num_timesteps, {"reward mean": reward_mean, "reward std": reward_std}
 
 def main():        
+    args = paser_argument()
     # Start Flower client
     #port = 8080 + args.index
-    client = CartPoleSwingUpClient(args.index)
-    fl.client.start_numpy_client(
+    client = MountainCarFixPosClient(args.index, args=args)
+    fl.client.start_client(
         server_address=f"127.0.0.1:" + args.port,
-        client=client,
+        client=client.to_client(),
     )
     # sys.exit()
 
@@ -144,6 +151,7 @@ def main():
         env = gym.make(args.environment, render_mode="human", **INIT_POS[args.index])
     else:
         env = gym.make(args.environment, render_mode="human", **INIT_POS[4])
+    # env = gym.make(args.environment, render_mode="human")
 
     while True:
         obs, info = env.reset()
@@ -152,12 +160,6 @@ def main():
             action, _ = client.model.predict(obs)
             obs, reward, done, truncated, info = env.step(action)
             env.render()
-
-
-def test():
-    client = CartPoleSwingUpClient(args.index)
-    para = client.get_parameters(None)
-    client.set_parameters(para)
 
 if __name__ == "__main__":
     main()
