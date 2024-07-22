@@ -19,8 +19,8 @@ if __name__ == "__main__":
     n_cpu = 1
     batch_size = 64
     env_name = "MountainCarFixPos-v0"
-    init_x = -1
-    x_limit = 0.5
+    init_x = 0
+    x_limit = 0.3
     #trained_env = GrayScale_env
     trained_env = make_vec_env(env_name, n_envs=n_cpu, vec_env_cls=SubprocVecEnv, seed = 1, env_kwargs = {"init_x": init_x, "x_limit": x_limit})
     tensorboard_log = "./"
@@ -37,12 +37,12 @@ if __name__ == "__main__":
                 gamma=0.8,
                 verbose=1,
                 target_kl=0.2,
-                ent_coef=0.03,
+                ent_coef=0.1,
                 vf_coef=0.8,
                 tensorboard_log=tensorboard_log)
     time_str = datetime.now().strftime("%Y%m%d%H%M")
     # Train the agent
-    model.learn(total_timesteps=int(1e3), tb_log_name=time_str)
+    model.learn(total_timesteps=int(2e6), tb_log_name=time_str)
     print("log name: ", tensorboard_log + time_str)
     model.save(tensorboard_log + "model")
 
